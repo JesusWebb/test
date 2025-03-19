@@ -45,7 +45,7 @@ const notes = [
 
 app.use(requestLogger)
 
-app.get(`/`, (request, response) => {
+app.get(`${ BASE_URL }/`, (request, response) => {
   response
     .status(200)
     .end("Prueba de Servidor")
