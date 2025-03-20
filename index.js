@@ -155,7 +155,7 @@ app.put(`${ BASE_URL }/notes/:id`, (request, response) => {
       }
 
       Note
-        .findOneAndUpdate({ id: idNote }, { text }, { new: true, runValidators: true })
+        .findOneAndUpdate({ id: idNote }, { text }, { new: true, runValidators: true, context: 'query' })
         .then((note) => {
           response
             .status(201)
