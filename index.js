@@ -1,5 +1,12 @@
+require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
+const Note = require('./models/noteModel')
+
+
+const password = process.argv[2]
+const url = `mongodb+srv://jesusCasEsl:${ password }@notescluster.edvm8.mongodb.net/notesApp?retryWrites=true&w=majority&appName=NotesCluster`
+
 const app = express()
 
 app.use(cors())
@@ -16,32 +23,6 @@ const requestLogger = (request, response, next) => {
 }
 
 const BASE_URL = "/api/v1"
-const notes = [
-  {
-    id: 1,
-    text: "Pruena 1",
-    status: true,
-    important: true,
-  },
-  {
-    id: 2,
-    text: "Prueba 2",
-    status: false,
-    important: false,
-  },
-  {
-    id: 3,
-    text: "Prueba 3",
-    status: false,
-    important: false,
-  },
-  {
-    id: 4,
-    text: "Prueba 4",
-    status: false,
-    important: true,
-  },
-]
 
 app.use(requestLogger)
 
@@ -52,23 +33,32 @@ app.get(`${ BASE_URL }/`, (request, response) => {
 })
 
 app.get(`${ BASE_URL }/notes`, (request, response) => {
-  response
-    .status(200)
-    .json(notes)
+  Note
+    .find({})
+    .then((notes) => {
+      response
+        .status(200)
+        .json(notes)
+    })
+  
 })
 
 app.get(`${ BASE_URL }/notes/:id`, (request, response) => {
   const { id } = request.params
-  const note = notes.find((note) => note.id === Number(id))
 
-  if(!note) {
-    return response
-      .status(404)
-      .json({ error: true, msg: "Nota no encontrada" })
-  }
+  Note
+    .find({ id: Number(id) })
+      .then((note) => {
+        if(note.length === 0) {
+          return response
+            .status(404)
+            .json({ error: true, msg: "Nota no encontrada" })
+        }
 
-  response
-    .json(note)
+        response
+          .json(note)
+      })
+
 })
 
 app.post(`${ BASE_URL }/notes`, (request, response) => {
@@ -81,8 +71,9 @@ app.post(`${ BASE_URL }/notes`, (request, response) => {
   }
 
   const {id, text, status, important } = body
+  const idNote = Number(id)
 
-  if(id == null) {
+  if(idNote == null) {
     return response
       .status(400)
       .json({ error: true, msg: "Falta la propiedad 'id'" })
@@ -93,29 +84,76 @@ app.post(`${ BASE_URL }/notes`, (request, response) => {
       .json({ error: true, msg: "Falta la propiedad 'important'" })
   }
 
-  const isNote = notes.some((note) => note.id === id)
+  Note
+    .find({ id: idNote })
+    .then((result) => {
+      if(result.length > 0) {
+        return response
+          .status(409)
+          .json({ error: true, msg: "La nota ya existe" })
+      }
 
-  if (isNote) {
+      const note = new Note({
+        id: idNote,
+        text: text || '',
+        status: status || false,
+        important: important || false
+      });
+      note
+        .save()
+        .then(() => {
+          console.log('note saved!')
+          response
+            .status(201)
+            .json({
+              error: false,
+              msg: "Nota creada correctamente",
+              note
+            })
+      })
+  })
+})
+
+app.put(`${ BASE_URL }/notes/:id`, (request, response) => {
+  const { body } = request
+  const { id } = request.params
+
+  if(!body || Object.entries(body).length === 0) {
     return response
-      .status(409)
-      .json({ error: true, msg: "La nota ya existe" })
+      .status(400)
+      .json({ error: true, msg: "Falta la nota" })
   }
 
-  const note = {
-    id,
-    text: text || '',
-    status: status || false,
-    important
-  };
-  notes.push(note);
+  const { text } = body
+  const idNote = Number(id)
 
-  response
-    .status(201)
-    .json({
-      error: false,
-      msg: "Nota creada correctamente",
-      note
-    })
+  if(idNote == null) {
+    return response
+      .status(400)
+      .json({ error: true, msg: "Falta la propiedad 'id'" })
+  }
+
+  Note
+    .find({ id: idNote })
+    .then((result) => {
+      if(result.length === 0) {
+        return response
+          .status(409)
+          .json({ error: true, msg: "La nota no existe" })
+      }
+
+      Note
+        .findOneAndUpdate({ id: idNote }, { text }, { new: true, runValidators: true })
+        .then((note) => {
+          response
+            .status(201)
+            .json({
+              error: false,
+              msg: "Nota modificada correctamente",
+              note
+            })
+      })
+  })
 })
 
 app.delete(`${ BASE_URL }/notes/:id`, (request, response) => {
@@ -127,25 +165,37 @@ app.delete(`${ BASE_URL }/notes/:id`, (request, response) => {
       .json({ error: true, msg: "Falta Por indicar la nota que deseas eliminar" })
   }
 
-  const indexNote = notes.findIndex((note) => note.id === Number(id))
+  const idNote = Number(id)
 
-  if (indexNote === -1) {
-    return response
-      .status(404)
-      .json({ error: true, msg: "La nota no existe" })
-  }
+  Note
+    .find({ id: idNote })
+      .then((note) => {
+        if(note.length === 0) {
+          return response
+            .status(404)
+            .json({ error: true, msg: "Nota no encontrada" })
+        }
 
-  notes.splice(indexNote, 1);
+        Note.findOneAndDelete({ id: idNote })
+          .then((result) => {
+            if (!result) {
+              return response
+                .status(404)
+                .json({ error: 'Linea not found' })
+            }
 
-  response
-    .status(200)
-    .json({
-      error: false,
-      msg: "Nota eliminada correctamente"
-    })
+            response
+              .status(200)
+              .json({
+                error: false,
+                msg: "Nota eliminada correctamente",
+                note
+              })
+          })
+      })
 })
 
-const PORT = process.env.PORT || 3001
+const PORT = process.env.PORT
 app.listen(3001, () => {
   console.log(`Server running on port ${PORT}`)
 })
