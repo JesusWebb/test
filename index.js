@@ -3,17 +3,11 @@ const express = require('express')
 const cors = require('cors')
 const Note = require('./models/noteModel')
 
-
+const BASE_URL = "/api/v1"
 const password = process.argv[2]
 const url = `mongodb+srv://jesusCasEsl:${ password }@notescluster.edvm8.mongodb.net/notesApp?retryWrites=true&w=majority&appName=NotesCluster`
 
-const app = express()
-
-app.use(cors())
-app.use(express.static('dist'))
-app.use(express.json());
-
-const requestLogger = (request, response, next) => {
+const requestLoggerMidd = (request, response, next) => {
   console.log('=======================')
   console.log('Method:', request.method)
   console.log('Path:  ', request.path)
@@ -21,10 +15,18 @@ const requestLogger = (request, response, next) => {
   console.log('=======================')
   next()
 }
+const unknownEndpointMIdd = (request, response) => {
+  response.status(404).send({ error: 'unknown endpoint' })
+}
 
-const BASE_URL = "/api/v1"
+const app = express()
 
-app.use(requestLogger)
+app.use(cors())
+app.use(express.static('dist'))
+app.use(express.json());
+
+app.use(requestLoggerMidd)
+
 
 app.get(`${ BASE_URL }/`, (request, response) => {
   response
@@ -58,7 +60,11 @@ app.get(`${ BASE_URL }/notes/:id`, (request, response) => {
         response
           .json(note)
       })
-
+    .catch((error) => {
+      response
+        .status(500)
+        .json({ error: true, msg: `Erro: ${error}` })
+    })
 })
 
 app.post(`${ BASE_URL }/notes`, (request, response) => {
@@ -112,6 +118,12 @@ app.post(`${ BASE_URL }/notes`, (request, response) => {
             })
       })
   })
+  .catch((error) => {
+    console.log(error)
+    response
+      .status(500)
+      .json({ error: true, msg: `Erro: ${error}` })
+  })
 })
 
 app.put(`${ BASE_URL }/notes/:id`, (request, response) => {
@@ -152,7 +164,17 @@ app.put(`${ BASE_URL }/notes/:id`, (request, response) => {
               msg: "Nota modificada correctamente",
               note
             })
-      })
+        })
+        .catch((error) => {
+          response
+            .status(500)
+            .json({ error: true, msg: `Erro: ${error}` })
+        })
+  })
+  .catch((error) => {
+    response
+      .status(500)
+      .json({ error: true, msg: `Erro: ${error}` })
   })
 })
 
@@ -169,31 +191,38 @@ app.delete(`${ BASE_URL }/notes/:id`, (request, response) => {
 
   Note
     .find({ id: idNote })
-      .then((note) => {
-        if(note.length === 0) {
-          return response
-            .status(404)
-            .json({ error: true, msg: "Nota no encontrada" })
-        }
+    .then((note) => {
+      if(note.length === 0) {
+        return response
+          .status(404)
+          .json({ error: true, msg: "Nota no encontrada" })
+      }
 
-        Note.findOneAndDelete({ id: idNote })
-          .then((result) => {
-            if (!result) {
-              return response
-                .status(404)
-                .json({ error: 'Linea not found' })
-            }
+      Note.findOneAndDelete({ id: idNote })
+        .then((result) => {
+          if (!result) {
+            return response
+              .status(404)
+              .json({ error: 'Nota not found' })
+          }
 
-            response
-              .status(200)
-              .json({
-                error: false,
-                msg: "Nota eliminada correctamente",
-                note
-              })
-          })
-      })
+          response
+            .status(204)
+            .json({
+              error: false,
+              msg: "Nota eliminada correctamente",
+              note
+            })
+        })
+    })
+    .catch((error) => {
+      response
+        .status(500)
+        .json({ error: true, msg: `Erro: ${error}` })
+    })
 })
+
+app.use(unknownEndpointMIdd)
 
 const PORT = process.env.PORT
 app.listen(3001, () => {
